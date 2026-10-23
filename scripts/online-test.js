@@ -69,10 +69,12 @@ app.whenReady().then(async () => {
   const guestPlayers = await g(`document.querySelectorAll('#players-list .player').length`);
   console.log('players host/guest:', hostPlayers, guestPlayers);
 
-  // host starts the game (with the powerups modifier on)
+  // host starts the game (with both modifiers on)
   console.log('HOST btn:', await h(`(() => { const b = document.querySelector('#lobby-start'); return { screen: document.querySelector('.screen.active')?.id, hidden: b.hidden, disabled: b.disabled, text: b.textContent.trim() }; })()`));
   await h(`document.querySelector('#lobby-powerups-toggle').click()`);
+  await h(`document.querySelector('#lobby-traps-toggle').click()`);
   console.log('POWERUPS toggle host:', await h(`document.querySelector('#lobby-powerups-toggle').classList.contains('on')`));
+  console.log('TRAPS toggle host:', await h(`document.querySelector('#lobby-traps-toggle').classList.contains('on')`));
   await h(`document.querySelector('#lobby-start').click()`);
   await sleep(1500);
   console.log('HOST after click:', JSON.stringify(await h(`({
@@ -85,6 +87,7 @@ app.whenReady().then(async () => {
   const guestGame = await waitFor(G, `document.querySelector('.screen.active')?.id === 'screen-game' ? document.querySelectorAll('.card').length : 0`, 10000);
   console.log('cards host/guest:', hostGame, guestGame);
   console.log('powerup badges host/guest:', await h(`document.querySelectorAll('.pu-badge').length`), await g(`document.querySelectorAll('.pu-badge').length`));
+  console.log('trap badges host/guest:', await h(`document.querySelectorAll('.trap-badge').length`), await g(`document.querySelectorAll('.trap-badge').length`));
 
   await sleep(800);
   const view = await g(`(() => {
@@ -112,14 +115,14 @@ app.whenReady().then(async () => {
   await sleep(1500);
   console.log('GUEST clue box:', JSON.stringify(await g(`document.querySelector('#clue-box').innerText.replace(/\\s+/g,' ').trim()`)));
 
-  // host reveals a powerup card; guest should mirror it and see the banner
-  const puIndex = await h(`[...document.querySelectorAll('.card')].findIndex(c => c.querySelector('.pu-badge'))`);
-  console.log('revealing powerup card at', puIndex);
-  await h(`document.querySelectorAll('.card')[${puIndex}].click()`);
+  // host steps on a trap card; the guest should mirror it and see the trap banner
+  const trapIndex = await h(`[...document.querySelectorAll('.card')].findIndex(c => c.querySelector('.trap-badge'))`);
+  console.log('revealing trap card at', trapIndex);
+  await h(`document.querySelectorAll('.card')[${trapIndex}].click()`);
   await sleep(1600);
-  const mirrored = await g(`({ revealed: document.querySelectorAll('.card.rev').length, score: document.querySelector('.scoreboard')?.innerText.replace(/\\s+/g,' ').trim(), banner: !document.querySelector('#pu-banner').hidden, bannerText: document.querySelector('#pu-banner').textContent.trim() })`);
+  const mirrored = await g(`({ revealed: document.querySelectorAll('.card.rev').length, score: document.querySelector('.scoreboard')?.innerText.replace(/\\s+/g,' ').trim(), trapBanner: !document.querySelector('#trap-banner').hidden, trapText: document.querySelector('#trap-banner').textContent.trim(), leaked: document.querySelectorAll('.card.leaked').length, trapLog: !!document.querySelector('.log-row.trap') })`);
   console.log('GUEST after host reveal:', JSON.stringify(mirrored));
-  console.log('HOST after reveal:', JSON.stringify(await h(`({ revealed: document.querySelectorAll('.card.rev').length, banner: !document.querySelector('#pu-banner').hidden, turn: document.querySelector('#turn-pill').textContent.trim() })`)));
+  console.log('HOST after reveal:', JSON.stringify(await h(`({ revealed: document.querySelectorAll('.card.rev').length, trapBanner: !document.querySelector('#trap-banner').hidden, turn: document.querySelector('#turn-pill').textContent.trim(), trapLog: !!document.querySelector('.log-row.trap') })`)));
 
   // guest chat
   await g(`document.querySelector('#chat-tab').click()`);

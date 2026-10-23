@@ -1,5 +1,5 @@
 // Dev-only: boot the built portable exe and verify it renders the home screen,
-// the new word packs, the 18+ opt-in gate and the powerups modifier.
+// the new word packs, the 18+ opt-in gate and the powerups/traps modifiers.
 // Always runs with a throwaway profile so it never touches real user data.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
@@ -93,7 +93,9 @@ console.log('ADULT GATE', JSON.stringify(gate));
 
 // run a quick local game to prove the packaged UI is interactive
 await ev(`document.querySelector('#powerups-toggle').click()`);
+await ev(`document.querySelector('#traps-toggle').click()`);
 const puToggle = await ev(`document.querySelector('#powerups-toggle').classList.contains('on')`);
+const trapToggle = await ev(`document.querySelector('#traps-toggle').classList.contains('on')`);
 await ev(`document.querySelector('#start-local').click()`);
 await sleep(500);
 await ev(`document.querySelector('#handoff-ok').click()`);
@@ -103,8 +105,11 @@ console.log('GAME', JSON.stringify(await ev(`({
   cards: document.querySelectorAll('.card').length,
   spyKey: document.querySelectorAll('.card.key-red,.card.key-blue,.card.key-assassin').length,
   puToggle: ${puToggle},
+  trapToggle: ${trapToggle},
   powerupBadges: document.querySelectorAll('.pu-badge').length,
-  modChip: !document.querySelector('#mod-chip').hidden
+  trapBadges: document.querySelectorAll('.trap-badge').length,
+  modChip: !document.querySelector('#mod-chip').hidden,
+  trapChip: !document.querySelector('#trap-chip').hidden
 })`)));
 
 // custom words: save, reload, confirm they survived (IPC store)

@@ -17,6 +17,14 @@ export const POWERUP_INFO = {
   reveal: { id: 'reveal', emoji: '👁️', name: 'كشف', desc: 'بيكشف كارت من كروت فريقك' }
 };
 
+/* ---------- traps (optional game modifier) ---------- */
+export const TRAP_IDS = ['mine', 'snare', 'leak'];
+export const TRAP_INFO = {
+  mine: { id: 'mine', emoji: '💥', name: 'لغم', desc: 'فريقك يخسر دوره الجاي' },
+  snare: { id: 'snare', emoji: '🪤', name: 'مصيدة', desc: '‏−١ تخمين في دورك الجاي' },
+  leak: { id: 'leak', emoji: '📢', name: 'تسريب', desc: 'كارت من كروتك لونه بيتكشف للكل' }
+};
+
 /* ---------- tiny rng helpers (seeded rng optional) ---------- */
 export function mulberry32(a) {
   return function () {
@@ -96,6 +104,19 @@ export function dealPowerups(board, rng = Math.random) {
   });
 }
 
+// Three traps, one of each type, hidden under different neutral ("innocent")
+// cards. Cards already holding a powerup are skipped so a single card can't
+// reward and punish at the same time.
+export function dealTraps(board, rng = Math.random) {
+  const neutrals = board.filter(c => c.color === NEUTRAL && !c.powerup);
+  const picks = shuffle(neutrals, rng).slice(0, TRAP_IDS.length);
+  const types = shuffle(TRAP_IDS, rng);
+  picks.forEach((card, i) => {
+    card.trap = types[i];
+    card.trapUsed = false;
+  });
+}
+
 /* ---------- state ---------- */
 export function createState(opts = {}, rng = Math.random) {
   const {
@@ -105,23 +126,28 @@ export function createState(opts = {}, rng = Math.random) {
     now = Date.now(),
     mode = 'local',
     packs = [],
-    powerups = false
+    powerups = false,
+    traps = false
   } = opts;
 
   const board = buildBoard(pool, firstTeam, rng);
   if (powerups) dealPowerups(board, rng);
+  if (traps) dealTraps(board, rng);
   const state = {
     version: 1,
     mode,
     packs,
     board,
-    modifiers: { powerups: !!powerups },
+    modifiers: { powerups: !!powerups, traps: !!traps },
     startTeam: firstTeam,
     turn: firstTeam,
     scores: { red: board.filter(c => c.color === RED).length, blue: board.filter(c => c.color === BLUE).length },
     shields: { red: 0, blue: 0 },
     bonusGuesses: { red: 0, blue: 0 },
+    skipTurn: { red: 0, blue: 0 },
+    trapPenalty: { red: 0, blue: 0 },
     lastPowerup: null,
+    lastTrap: null,
     clue: null,
     phase: 'clue',          // clue | guess | over
     clueNumber: 0,
@@ -149,12 +175,18 @@ export function setClue(state, word, count, now = Date.now()) {
   if (!clean) return { ok: false, error: 'اكتب كلمة التلميح' };
   const n = Math.max(0, Math.min(9, Number(count) || 0));
   const bonus = state.bonusGuesses?.[state.turn] || 0;
+  const penalty = state.trapPenalty?.[state.turn] || 0;
   state.clue = { word: clean, count: n, team: state.turn };
   state.phase = 'guess';
-  state.guessesLeft = n + 1 + bonus;      // official: number + 1 guesses (+ powerup bonus)
+  // official: number + 1 guesses (+ powerup bonus − trap penalty)
+  state.guessesLeft = Math.max(1, n + 1 + bonus - penalty);
   if (bonus) {
     state.bonusGuesses[state.turn] = 0;
     addLog(state, 'power', `⚡ ${TEAM_LABEL[state.turn]}: +${bonus} تخمين من الباور أب`);
+  }
+  if (penalty) {
+    state.trapPenalty[state.turn] = 0;
+    addLog(state, 'trap', `🪤 ${TEAM_LABEL[state.turn]}: −${penalty} تخمين بسبب المصيدة`);
   }
   if (state.timerSeconds > 0) state.turnEndsAt = now + state.timerSeconds * 1000;
   addLog(state, 'clue', `${TEAM_LABEL[state.turn]}: «${clean}» ${n}`);
@@ -214,12 +246,18 @@ export function reveal(state, index, rng = Math.random) {
     ? applyPowerup(state, card, team, rng)
     : null;
 
+  // A trap hidden under an innocent (neutral) card punishes the team that
+  // stepped on it. Only the spymaster can see these, so they can steer away.
+  const trap = (card.trap && !card.trapUsed)
+    ? applyTrap(state, card, team, rng)
+    : null;
+
   if (state.scores[team] === 0) {
     state.phase = 'over';
     state.winner = team;
     state.winReason = `الفريق ${TEAM_LABEL[team]} كشف كل كلماته`;
     addLog(state, 'win', `🏆 ${TEAM_LABEL[team]} كسبوا!`);
-    return { ok: true, type: 'win', powerup };
+    return { ok: true, type: 'win', powerup, trap };
   }
 
   if (type === 'wrong' || assassinSaved) {
@@ -227,17 +265,17 @@ export function reveal(state, index, rng = Math.random) {
     if ((state.shields?.[team] || 0) > 0) {
       state.shields[team]--;
       addLog(state, 'power', `🛡️ درع ${TEAM_LABEL[team]} منع خسارة الدور`);
-      return { ok: true, type: 'shielded', powerup };
+      return { ok: true, type: 'shielded', powerup, trap };
     }
     endTurn(state);
-    return { ok: true, type: assassinSaved ? 'saved' : 'wrong', powerup };
+    return { ok: true, type: assassinSaved ? 'saved' : 'wrong', powerup, trap };
   }
 
   if (state.guessesLeft === 0) {
     endTurn(state);
-    return { ok: true, type: 'exhausted', powerup };
+    return { ok: true, type: 'exhausted', powerup, trap };
   }
-  return { ok: true, type: 'correct', powerup };
+  return { ok: true, type: 'correct', powerup, trap };
 }
 
 /* ---------- powerup effects ---------- */
@@ -284,9 +322,50 @@ function applyPowerup(state, card, team, rng) {
   return event;
 }
 
+/* ---------- trap effects ---------- */
+function leakOwnCard(state, team, rng) {
+  const own = state.board.filter(c => !c.revealed && c.color === team && !c.leaked);
+  if (!own.length) return null;
+  const card = own[Math.floor(rng() * own.length)];
+  card.leaked = true;
+  return card;
+}
+
+function applyTrap(state, card, team, rng) {
+  const type = card.trap;
+  if (!type) return null;
+  card.trapUsed = true;
+  const event = { type, team, cardAr: card.ar, ts: Date.now(), leakedCard: null };
+
+  if (type === 'mine') {
+    state.skipTurn[team] = (state.skipTurn[team] || 0) + 1;
+    addLog(state, 'trap', `💥 لغم! ${TEAM_LABEL[team]} هيفقدوا دورهم الجاي`);
+  } else if (type === 'snare') {
+    state.trapPenalty[team] = (state.trapPenalty[team] || 0) + 1;
+    addLog(state, 'trap', `🪤 مصيدة! ${TEAM_LABEL[team]} −١ تخمين في دورهم الجاي`);
+  } else if (type === 'leak') {
+    const target = leakOwnCard(state, team, rng);
+    event.leakedCard = target ? target.ar : null;
+    addLog(state, 'trap', target
+      ? `📢 تسريب! لون كارت ${target.ar} اتكشف للكل`
+      : '📢 تسريب! بس مفيش كروت تتكشف');
+  }
+
+  state.lastTrap = event;
+  state.version++;
+  return event;
+}
+
 export function endTurn(state, now = Date.now()) {
   if (state.phase === 'over') return;
-  state.turn = state.turn === RED ? BLUE : RED;
+  let next = state.turn === RED ? BLUE : RED;
+  // A landmine makes the other team skip their whole next turn.
+  if ((state.skipTurn?.[next] || 0) > 0) {
+    state.skipTurn[next]--;
+    addLog(state, 'trap', `💥 ${TEAM_LABEL[next]} فقدوا دورهم بسبب اللغم`);
+    next = state.turn;
+  }
+  state.turn = next;
   state.phase = 'clue';
   state.clue = null;
   state.guessesLeft = 0;
@@ -311,15 +390,18 @@ export function makeView(state, opts = {}) {
       ar: c.ar,
       en: c.en,
       revealed: c.revealed,
-      color: showKey || c.revealed ? c.color : null,
-      powerup: c.powerup ? { used: !!c.powerupUsed, type: c.powerupUsed ? c.powerup : null } : null
+      color: showKey || c.revealed || c.leaked ? c.color : null,
+      leaked: !!c.leaked,
+      powerup: c.powerup ? { used: !!c.powerupUsed, type: c.powerupUsed ? c.powerup : null } : null,
+      trap: showKey && c.trap && !c.trapUsed ? c.trap : null
     })),
     turn: state.turn,
     startTeam: state.startTeam,
     scores: { ...state.scores },
     shields: { ...(state.shields || { red: 0, blue: 0 }) },
-    modifiers: { ...(state.modifiers || { powerups: false }) },
+    modifiers: { ...(state.modifiers || { powerups: false, traps: false }) },
     lastPowerup: state.lastPowerup || null,
+    lastTrap: state.lastTrap || null,
     clue: state.clue,
     phase: state.phase,
     guessesLeft: state.guessesLeft,

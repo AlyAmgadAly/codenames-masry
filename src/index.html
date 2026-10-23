@@ -109,7 +109,12 @@
           <span class="mod-body"><b>باور أبس</b><small>٣ هدايا مخفية تحت كروت عشوائية</small></span>
           <span class="mod-check">✓</span>
         </button>
-        <p class="hint">هدية مضمونة لكل فريق + هدية على كارت رمادي. اللي يكشف الكارت بياخدها.</p>
+        <button type="button" class="mod-btn trap" id="traps-toggle">
+          <span class="mod-ico">🪤</span>
+          <span class="mod-body"><b>فخاخ</b><small>٣ فخاخ مخفية تحت كروت رمادية — الماستر بس بيشوفها</small></span>
+          <span class="mod-check">✓</span>
+        </button>
+        <p class="hint">الباور أبس بتكافئ اللي يكشف الكارت، والفخاخ بتعاقب اللي يقع فيها. يقدروا يشتغلوا مع بعض.</p>
       </div>
 
       <div class="panel-box">
@@ -213,6 +218,11 @@
         <span class="mod-body"><b>باور أبس</b><small>٣ هدايا مخفية تحت كروت عشوائية</small></span>
         <span class="mod-check">✓</span>
       </button>
+      <button type="button" class="mod-btn trap" id="lobby-traps-toggle">
+        <span class="mod-ico">🪤</span>
+        <span class="mod-body"><b>فخاخ</b><small>٣ فخاخ مخفية تحت كروت رمادية — الماستر بس بيشوفها</small></span>
+        <span class="mod-check">✓</span>
+      </button>
       <p class="hint">الإعدادات دي بيتحكم فيها الهوست قبل بدء اللعبة.</p>
     </div>
 
@@ -227,11 +237,13 @@
 <section class="screen" id="screen-game">
   <div class="game">
     <div class="pu-banner" id="pu-banner" hidden></div>
+    <div class="pu-banner trap" id="trap-banner" hidden></div>
     <header class="gamebar">
       <button class="icon-btn" id="exit-game" title="خروج من اللعبة">✕</button>
       <div class="turn-pill" id="turn-pill"><i></i><span>دور الأحمر</span></div>
       <div class="timer" id="timer" title="وقت التخمين">--:--</div>
       <div class="mod-chip" id="mod-chip" hidden>🎁 باور أبس</div>
+      <div class="mod-chip trap" id="trap-chip" hidden>🪤 فخاخ</div>
       <div class="spacer"></div>
       <button class="room-chip" id="room-chip" hidden></button>
       <div class="me-badge" id="me-badge" hidden></div>
@@ -341,6 +353,7 @@
       <li>لو كشفوا كارت للفريق التاني، بيتحسب للتاني وبيخلص دورهم.</li>
       <li>لو فتحوا <b>القاتل</b> — خسروا فوراً 😅</li>
       <li>لو <b>الباور أبس</b> شغالة: ٣ هدايا مخفية تحت كروت (واحدة لكل فريق + واحدة على كارت رمادي). اللي يكشف الكارت بياخدها: <b>⚡ +٢ تخمينات</b>، <b>🛡️ درع</b> بيمنع غلطة واحدة (وحتى القاتل مرة)، أو <b>👁️ كشف</b> كارت مجاني من كروت فريقك.</li>
+      <li>لو <b>الفخاخ</b> شغالة: ٣ فخاخ مخفية تحت كروت رمادية. <b>الماستر بس</b> بيشوفها، فقدر يوجّه فريقه بعيد عنها. اللي يقع في فخ: <b>💥 يخسر دوره الجاي</b>، أو <b>🪤 −١ تخمين</b> في دوره الجاي، أو <b>📢 لون كارت من كروته بيتكشف للكل</b>.</li>
       <li>أول فريق يكشف كل كلماته يكسب.</li>
     </ol>
     <p class="hint">أونلاين: الماستر بيعمل غرفة، بياخد كود، وبيديه لأصحابه. الكمبيوتر بتاعه هو اللي بيشغّل اللعبة.</p>

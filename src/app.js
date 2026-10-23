@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS = {
   sound: true,
   showEn: true,
   powerups: false,
+  traps: false,
   name: '',
   redName: 'الفريق الأحمر',
   blueName: 'الفريق الأزرق'
@@ -58,6 +59,8 @@ const app = {
   lastTap: 0,
   lastPuTs: 0,
   puTimer: null,
+  lastTrapTs: 0,
+  trapTimer: null,
   toastTimer: null
 };
 
@@ -200,6 +203,7 @@ function sfx(kind) {
     case 'lose': [392, 330, 262, 196].forEach((f, i) => tone(f, 0.22, 'sine', i * 0.13, 0.06)); break;
     case 'tap': tone(620, 0.05, 'sine', 0, 0.03); break;
     case 'power': [660, 880, 1100, 1320].forEach((f, i) => tone(f, 0.13, 'triangle', i * 0.06, 0.05)); break;
+    case 'trap': tone(190, 0.22, 'square', 0, 0.05); tone(120, 0.32, 'sawtooth', 0.08, 0.055); tone(80, 0.4, 'sine', 0.18, 0.05); break;
     default: break;
   }
 }
@@ -275,19 +279,38 @@ function renderSetup() {
   $('#name-blue').value = app.settings.blueName;
   $$('#timer-seg button').forEach(b => b.classList.toggle('on', Number(b.dataset.timer) === app.settings.timer));
   renderPackGrid('pack-grid');
-  renderPowerupToggles();
+  renderModifierToggles();
   updatePoolCounters();
 }
 
-function renderPowerupToggles() {
-  const on = !!app.settings.powerups;
-  for (const sel of ['#powerups-toggle', '#lobby-powerups-toggle']) {
-    const btn = $(sel);
-    if (!btn) continue;
-    btn.classList.toggle('on', on);
-    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
-    btn.disabled = sel === '#lobby-powerups-toggle' && !app.online.isHost;
+function renderModifierToggles() {
+  const mods = [
+    { key: 'powerups', sels: ['#powerups-toggle', '#lobby-powerups-toggle'] },
+    { key: 'traps', sels: ['#traps-toggle', '#lobby-traps-toggle'] }
+  ];
+  for (const mod of mods) {
+    const on = !!app.settings[mod.key];
+    for (const sel of mod.sels) {
+      const btn = $(sel);
+      if (!btn) continue;
+      btn.classList.toggle('on', on);
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      btn.disabled = sel.startsWith('#lobby-') && !app.online.isHost;
+    }
   }
+}
+
+function hideModifierBanners() {
+  for (const sel of ['#pu-banner', '#trap-banner']) {
+    const el = $(sel);
+    if (!el) continue;
+    el.classList.remove('show');
+    el.hidden = true;
+  }
+  clearTimeout(app.puTimer);
+  clearTimeout(app.trapTimer);
+  app.lastPuTs = 0;
+  app.lastTrapTs = 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -314,13 +337,14 @@ function startLocal() {
     timerSeconds: app.settings.timer,
     mode: 'local',
     packs: app.settings.packs,
-    powerups: !!app.settings.powerups
+    powerups: !!app.settings.powerups,
+    traps: !!app.settings.traps
   });
   app.local.revealed = new Set();
   app.local.phase = 'handoff-spymaster';
   app.shownOver = false;
   app.seen = new Set();
-  app.lastPuTs = 0;
+  hideModifierBanners();
   app.endGuard = false;
 
   go('game');
@@ -686,12 +710,13 @@ function hostStart() {
     timerSeconds: app.settings.timer,
     mode: 'online',
     packs: app.settings.packs,
-    powerups: !!app.settings.powerups
+    powerups: !!app.settings.powerups,
+    traps: !!app.settings.traps
   });
   app.shownOver = false;
   app.endGuard = false;
   app.seen = new Set();
-  app.lastPuTs = 0;
+  hideModifierBanners();
   broadcastState();
   go('game');
 }
@@ -726,6 +751,7 @@ function guestOnData(msg) {
       if (msg.view.version === 1) app.seen = new Set();
       if (app.screen !== 'game') {
         app.lastPuTs = msg.view.lastPowerup?.ts || 0;
+        app.lastTrapTs = msg.view.lastTrap?.ts || 0;
         closeOverlay('overlay-handoff');
         go('game');
       } else {
@@ -814,7 +840,7 @@ function renderLobby() {
     pg.appendChild(b);
   }
   $$('#lobby-timer-seg button').forEach(b => b.classList.toggle('on', Number(b.dataset.timer) === app.settings.timer));
-  renderPowerupToggles();
+  renderModifierToggles();
 
   const list = $('#players-list');
   list.innerHTML = '';
@@ -921,8 +947,10 @@ function renderGame() {
   $('#shield-red').hidden = !(v.shields?.red > 0);
   $('#shield-blue').hidden = !(v.shields?.blue > 0);
   $('#mod-chip').hidden = !v.modifiers?.powerups;
+  $('#trap-chip').hidden = !v.modifiers?.traps;
 
   maybeShowPowerup(v);
+  maybeShowTrap(v);
 
   const chip = $('#room-chip');
   if (app.mode === 'online' && app.online.room) {
@@ -969,6 +997,7 @@ function renderBoard(v) {
       if (!app.seen.has(c.id)) btn.classList.add('just');
     } else if (c.color) {
       btn.classList.add('key', 'key-' + c.color);
+      if (c.leaked) btn.classList.add('leaked');
     }
 
     if (!revealable || c.revealed) btn.classList.add('locked');
@@ -987,6 +1016,23 @@ function renderBoard(v) {
       pu.textContent = '?';
       pu.title = 'باور أب مخفي — اللي يكشف الكارت بياخده';
       btn.appendChild(pu);
+    }
+
+    if (c.leaked && !c.revealed) {
+      const leak = document.createElement('span');
+      leak.className = 'leak-badge';
+      leak.textContent = '📢';
+      leak.title = 'الكارت ده اتسرّب لونه للكل';
+      btn.appendChild(leak);
+    }
+
+    if (c.trap) {
+      const info = E.TRAP_INFO[c.trap] || { emoji: '⚠️', name: 'فخ' };
+      const trap = document.createElement('span');
+      trap.className = 'trap-badge';
+      trap.textContent = info.emoji;
+      trap.title = `فخ مخفي: ${info.name} — ${info.desc}`;
+      btn.appendChild(trap);
     }
 
     btn.addEventListener('click', () => onCardClick(i));
@@ -1022,6 +1068,33 @@ function maybeShowPowerup(v) {
     setTimeout(() => { el.hidden = true; }, 280);
   }, 3000);
   sfx('power');
+}
+
+/* ---------- trap feedback ---------- */
+function maybeShowTrap(v) {
+  const tr = v.lastTrap;
+  if (!tr || !tr.ts || tr.ts === app.lastTrapTs) return;
+  app.lastTrapTs = tr.ts;
+  const el = $('#trap-banner');
+  if (!el) return;
+  const info = E.TRAP_INFO[tr.type] || { emoji: '⚠️', name: 'فخ', desc: '' };
+  const what = tr.type === 'mine'
+    ? 'هيفقدوا دورهم الجاي'
+    : tr.type === 'snare'
+      ? '−١ تخمين في دورهم الجاي'
+      : tr.type === 'leak'
+        ? (tr.leakedCard ? `لون كارت «${tr.leakedCard}» اتكشف للكل` : 'مفيش كروت اتكشفت')
+        : info.desc;
+  el.className = 'pu-banner trap ' + (tr.team || '');
+  el.innerHTML = `<span class="pu-ic">${info.emoji}</span><span><b>${teamName(tr.team)}</b> وقعوا في ${info.name} — ${escapeHtml(what)}</span>`;
+  el.hidden = false;
+  clearTimeout(app.trapTimer);
+  requestAnimationFrame(() => el.classList.add('show'));
+  app.trapTimer = setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => { el.hidden = true; }, 280);
+  }, 3600);
+  sfx('trap');
 }
 
 function renderClue(v) {
@@ -1261,6 +1334,7 @@ function exitGame() {
   }
   closeOverlay('overlay-gameover');
   closeOverlay('overlay-handoff');
+  hideModifierBanners();
   if (app.mode === 'online') leaveOnline();
   app.local.state = null;
   go('home');
@@ -1492,19 +1566,19 @@ function bind() {
   }));
 
   // game modifiers
-  $('#powerups-toggle').addEventListener('click', () => {
-    app.settings.powerups = !app.settings.powerups;
-    saveSettings();
-    sfx('tap');
-    renderPowerupToggles();
-  });
-  $('#lobby-powerups-toggle').addEventListener('click', () => {
-    if (!app.online.isHost) return;
-    app.settings.powerups = !app.settings.powerups;
-    saveSettings();
-    sfx('tap');
-    renderPowerupToggles();
-  });
+  const bindModifier = (sel, key, lobby = false) => {
+    $(sel)?.addEventListener('click', () => {
+      if (lobby && !app.online.isHost) return;
+      app.settings[key] = !app.settings[key];
+      saveSettings();
+      sfx('tap');
+      renderModifierToggles();
+    });
+  };
+  bindModifier('#powerups-toggle', 'powerups');
+  bindModifier('#lobby-powerups-toggle', 'powerups', true);
+  bindModifier('#traps-toggle', 'traps');
+  bindModifier('#lobby-traps-toggle', 'traps', true);
 
   // game
   $('#exit-game').addEventListener('click', exitGame);
