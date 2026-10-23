@@ -7,7 +7,8 @@
 
 ## التشغيل
 
-- **الملف الجاهز:** `dist/Codenames-Masry-1.0.0.exe` — دوس عليه وبس.
+- **الملف الجاهز (ويندوز 64):** نزّله من [صفحة الإصدارات](https://github.com/AlyAmgadAly/codenames-masry/releases/latest) — ملف واحد، مفيش تنصيب.
+  أول مرة Windows SmartScreen ممكن يحذّر لأن الملف مش موقّع رقميًا: **More info → Run anyway**.
 - **من السورس:**
   ```powershell
   npm install
