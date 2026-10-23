@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self' wss: https:;" />
+<title>كلمة سر — Codenames Masry</title>
+<link rel="stylesheet" href="./fonts/fonts.css" />
+<link rel="stylesheet" href="./styles.css" />
+</head>
+<body class="booting">
+<div class="bg-glow" aria-hidden="true"></div>
+<div class="bg-grain" aria-hidden="true"></div>
+
+<div id="boot-splash">
+  <div class="boot-glyph">𓆣</div>
+  <div class="boot-bar"><i></i></div>
+</div>
+
+<!-- ============================ HOME ============================ -->
+<section class="screen active" id="screen-home">
+  <div class="home-wrap">
+    <div class="brand">
+      <div class="brand-glyph" aria-hidden="true">𓆣</div>
+      <h1>كلمة <span>سر</span></h1>
+      <p class="tagline">كود نيمز مصري: ميمز، نجوم، أكل… وواحد فيهم القاتل 💀</p>
+    </div>
+
+    <div class="home-grid">
+      <button class="mode-card" id="go-local">
+        <span class="mode-ico">🛋️</span>
+        <span class="mode-title">على نفس الجهاز</span>
+        <span class="mode-desc">جهاز واحد، فريقين، وتمرير الموبايل / اللابتوب بينكم.</span>
+        <span class="mode-cta">يلا نبدأ</span>
+      </button>
+
+      <button class="mode-card" id="go-online">
+        <span class="mode-ico">🌐</span>
+        <span class="mode-title">أونلاين مع أصحابك</span>
+        <span class="mode-desc">اعمل غرفة، ابعت الكود لـ ٣ أصحابك، والعبوا من أي مكان.</span>
+        <span class="mode-cta">اعمل غرفة</span>
+      </button>
+
+      <button class="mode-card" id="go-join">
+        <span class="mode-ico">🎟️</span>
+        <span class="mode-title">عندي كود غرفة</span>
+        <span class="mode-desc">صاحبك عملك غرفة؟ اكتب الكود وادخل في ثانية.</span>
+        <span class="mode-cta">دخول</span>
+      </button>
+
+      <button class="mode-card" id="go-words">
+        <span class="mode-ico">✍️</span>
+        <span class="mode-title">كلماتي</span>
+        <span class="mode-desc">ضيف ميمز العيلة، أسامي الشلة، وأي حاجة متخصكش حد.</span>
+        <span class="mode-cta">عدّل الكلمات</span>
+      </button>
+    </div>
+
+    <div class="home-foot">
+      <button class="ghost sm" id="go-rules">📜 إزاي نلعب</button>
+      <button class="ghost sm" id="go-sound"><span id="sound-label">🔊 الأصوات شغالة</span></button>
+      <span class="ver" id="ver-label"></span>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ LOCAL SETUP ============================ -->
+<section class="screen" id="screen-setup">
+  <div class="page">
+    <header class="page-head">
+      <button class="icon-btn" data-back="home" title="رجوع">→</button>
+      <div>
+        <h2>تجهيز اللعبة</h2>
+        <p class="muted">اختار الكلمات، سمّي الفرق، وابدأ.</p>
+      </div>
+    </header>
+
+    <div class="setup-grid">
+      <div class="panel-box">
+        <h3>أسماء الفرق</h3>
+        <label class="field">
+          <span>الفريق الأحمر</span>
+          <input id="name-red" maxlength="18" value="الفريق الأحمر" />
+        </label>
+        <label class="field">
+          <span>الفريق الأزرق</span>
+          <input id="name-blue" maxlength="18" value="الفريق الأزرق" />
+        </label>
+
+        <h3>وقت التخمين</h3>
+        <div class="seg" id="timer-seg">
+          <button data-timer="0" class="on">بدون</button>
+          <button data-timer="60">٦٠ ث</button>
+          <button data-timer="120">٢ د</button>
+          <button data-timer="180">٣ د</button>
+        </div>
+        <p class="hint">الوقت بيبدأ أول ما الماستر يقول التلميح.</p>
+
+        <h3>مين يبدأ؟</h3>
+        <div class="seg" id="first-seg">
+          <button data-first="random" class="on">عشوائي</button>
+          <button data-first="red">الأحمر</button>
+          <button data-first="blue">الأزرق</button>
+        </div>
+      </div>
+
+      <div class="panel-box">
+        <div class="row-between">
+          <h3>كلمات اللعبة</h3>
+          <span class="counter" id="pool-counter">0 كلمة</span>
+        </div>
+        <div class="pack-grid" id="pack-grid"></div>
+        <p class="hint" id="pool-hint">محتاج ٢٥ كلمة على الأقل.</p>
+      </div>
+    </div>
+
+    <div class="page-actions">
+      <button class="btn primary big" id="start-local">ابدأ اللعبة 🎲</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ ONLINE ENTRY ============================ -->
+<section class="screen" id="screen-online">
+  <div class="page narrow">
+    <header class="page-head">
+      <button class="icon-btn" data-back="home" title="رجوع">→</button>
+      <div>
+        <h2>لعب أونلاين</h2>
+        <p class="muted">الغرفة بتفتح من جهازك — بدون سيرفر وبدون فلوس.</p>
+      </div>
+    </header>
+
+    <div class="panel-box">
+      <label class="field">
+        <span>اسمك</span>
+        <input id="player-name" maxlength="16" placeholder="مثلاً: ميدو" />
+      </label>
+
+      <div class="online-split">
+        <div class="online-col">
+          <h3>اعمل غرفة</h3>
+          <p class="hint">انت اللي بتستضيف. سيب البرنامج مفتوح عشان الغرفة تفضل شغالة.</p>
+          <button class="btn primary" id="create-room">إنشاء غرفة 🌐</button>
+        </div>
+        <div class="online-col">
+          <h3>ادخل بكود</h3>
+          <label class="field">
+            <span>كود الغرفة</span>
+            <input id="join-code" maxlength="6" placeholder="ABC12" class="code-input" autocomplete="off" />
+          </label>
+          <button class="btn" id="join-room">دخول 🎟️</button>
+        </div>
+      </div>
+      <p class="hint tiny">الاتصال P2P مباشرة بين الأجهزة؛ كود الغرفة بيمر على سيرفر مجاني للتوصيل بس. أول مرة ممكن Windows يسأل عن الفايروول — اختار سماح.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ LOBBY ============================ -->
+<section class="screen" id="screen-lobby">
+  <div class="page narrow">
+    <header class="page-head">
+      <button class="icon-btn" id="leave-lobby" title="خروج">→</button>
+      <div>
+        <h2>غرفة الانتظار</h2>
+        <p class="muted" id="lobby-sub">ابعت الكود لأصحابك</p>
+      </div>
+    </header>
+
+    <div class="room-box">
+      <div>
+        <div class="label">كود الغرفة</div>
+        <div class="room-code" id="room-code">-----</div>
+      </div>
+      <button class="btn sm" id="copy-code">📋 انسخ</button>
+      <button class="btn sm ghost-b" id="copy-invite">✉️ رسالة الدعوة</button>
+    </div>
+
+    <div class="panel-box">
+      <div class="row-between">
+        <h3>اللاعبين <span class="muted" id="player-count"></span></h3>
+        <button class="btn sm ghost-b" id="auto-assign">🎲 توزيع تلقائي</button>
+      </div>
+      <div class="players" id="players-list"></div>
+      <p class="hint" id="lobby-hint"></p>
+    </div>
+
+    <div class="panel-box" id="lobby-settings">
+      <div class="row-between">
+        <h3>كلمات اللعبة</h3>
+        <span class="counter" id="lobby-pool-count">0 كلمة</span>
+      </div>
+      <div class="pack-grid" id="lobby-pack-grid"></div>
+      <h3>وقت التخمين</h3>
+      <div class="seg" id="lobby-timer-seg">
+        <button data-timer="0">بدون</button>
+        <button data-timer="60">٦٠ ث</button>
+        <button data-timer="120">٢ د</button>
+        <button data-timer="180">٣ د</button>
+      </div>
+      <p class="hint">الإعدادات دي بيتحكم فيها الهوست قبل بدء اللعبة.</p>
+    </div>
+
+    <div class="page-actions">
+      <button class="btn primary big" id="lobby-start">ابدأ اللعبة 🚀</button>
+      <p class="hint" id="lobby-wait" hidden>مستنيين الهوست يبدأ…</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ GAME ============================ -->
+<section class="screen" id="screen-game">
+  <div class="game">
+    <header class="gamebar">
+      <button class="icon-btn" id="exit-game" title="خروج من اللعبة">✕</button>
+      <div class="turn-pill" id="turn-pill"><i></i><span>دور الأحمر</span></div>
+      <div class="timer" id="timer" title="وقت التخمين">--:--</div>
+      <div class="spacer"></div>
+      <button class="room-chip" id="room-chip" hidden></button>
+      <div class="me-badge" id="me-badge" hidden></div>
+    </header>
+
+    <div class="game-layout">
+      <main class="board-wrap">
+        <div class="scoreboard">
+          <div class="score red" id="score-red">
+            <span class="score-name">الفريق الأحمر</span>
+            <span class="score-num">9</span>
+          </div>
+          <div class="score blue" id="score-blue">
+            <span class="score-name">الفريق الأزرق</span>
+            <span class="score-num">9</span>
+          </div>
+        </div>
+        <div class="board" id="board"></div>
+        <div class="board-foot" id="board-foot">دوس على الكارت عشان تكشفه.</div>
+      </main>
+
+      <aside class="panel">
+        <div class="clue-box" id="clue-box">
+          <div class="clue-empty">مستنيين التلميح…</div>
+        </div>
+
+        <div id="controls"></div>
+
+        <div class="panel-tabs">
+          <button class="on" data-tab="log">السجل</button>
+          <button data-tab="chat" id="chat-tab">الشات</button>
+        </div>
+        <div class="tab-body" id="tab-body"></div>
+
+        <div class="chat-input" id="chat-input" hidden>
+          <input id="chat-text" maxlength="120" placeholder="اكتب حاجة… (Enter)" />
+          <button class="btn sm" id="chat-send">➤</button>
+        </div>
+      </aside>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ CUSTOM WORDS ============================ -->
+<section class="screen" id="screen-words">
+  <div class="page narrow">
+    <header class="page-head">
+      <button class="icon-btn" data-back="home" title="رجوع">→</button>
+      <div>
+        <h2>كلماتي</h2>
+        <p class="muted">كل سطر كلمة. تقدر تكتب الترجمة بعد علامة =</p>
+      </div>
+    </header>
+
+    <div class="panel-box">
+      <label class="field">
+        <span>اسم الباكدج</span>
+        <input id="custom-name" maxlength="24" value="كلماتي" />
+      </label>
+      <label class="field">
+        <span>الكلمات</span>
+        <textarea id="custom-words" rows="12" placeholder="الشلة&#10;قهوة الحاجة&#10;عم مجدي بتاع البقالة = Uncle Magdy&#10;القطة اللي في الشارع"></textarea>
+      </label>
+      <div class="row wrap gap">
+        <button class="btn primary" id="save-words">💾 احفظ</button>
+        <button class="btn ghost-b" id="export-words">⬇️ صدّر JSON</button>
+        <button class="btn ghost-b" id="import-words">⬆️ استورد JSON</button>
+      </div>
+      <p class="hint" id="words-count"></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ MODALS ============================ -->
+<div class="overlay" id="overlay-handoff" hidden>
+  <div class="handoff">
+    <div class="handoff-team" id="handoff-team">الفريق الأحمر</div>
+    <div class="handoff-role" id="handoff-role">الماستر</div>
+    <p class="handoff-text" id="handoff-text"></p>
+    <button class="btn primary big" id="handoff-ok">تمام، وري الألوان 👁️</button>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-gameover" hidden>
+  <div class="gameover">
+    <div class="go-glyph" id="go-glyph">🏆</div>
+    <h2 id="go-title">الفريق الأحمر كسب!</h2>
+    <p id="go-reason"></p>
+    <div class="go-actions">
+      <button class="btn primary" id="go-again">لعبة جديدة 🔄</button>
+      <button class="btn ghost-b" id="go-home">الرئيسية</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="overlay-rules" hidden>
+  <div class="rules">
+    <button class="icon-btn close" id="rules-close">✕</button>
+    <h2>إزاي نلعب؟</h2>
+    <ol>
+      <li><b>٢٥ كارت</b> قدامكم. منهم <b class="c-red">٩ أحمر</b>، <b class="c-blue">٨ أزرق</b>، ٧ رمادي، و<b class="c-black">١ قاتل</b> 💀</li>
+      <li>كل فريق ليه <b>ماستر</b> — هو الوحيد اللي بيشوف ألوان الكروت.</li>
+      <li>الماستر بيقول <b>كلمة واحدة + رقم</b> (مثلاً: «أكل ٢») من غير ما يقول أي كلمة على الكروت.</li>
+      <li>الفريق بيخمن قد الرقم <b>+ ١</b>. كل تخمين صح بيكملوا، أول غلط بيخلص الدور.</li>
+      <li>لو كشفوا كارت للفريق التاني، بيتحسب للتاني وبيخلص دورهم.</li>
+      <li>لو فتحوا <b>القاتل</b> — خسروا فوراً 😅</li>
+      <li>أول فريق يكشف كل كلماته يكسب.</li>
+    </ol>
+    <p class="hint">أونلاين: الماستر بيعمل غرفة، بياخد كود، وبيديه لأصحابه. الكمبيوتر بتاعه هو اللي بيشغّل اللعبة.</p>
+    <button class="btn primary" id="rules-ok">فهمت</button>
+  </div>
+</div>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="../vendor/peerjs.min.js"></script>
+<script type="module" src="./app.js"></script>
+</body>
+</html>

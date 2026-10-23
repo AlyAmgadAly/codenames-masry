@@ -1,0 +1,8 @@
+/* Full Cairo variable font (Arabic + Latin), bundled offline. */
+@font-face {
+  font-family: 'Cairo';
+  src: url('./Cairo-Variable.ttf') format('truetype');
+  font-weight: 200 1000;
+  font-style: normal;
+  font-display: block;
+}
