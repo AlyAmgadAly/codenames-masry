@@ -1,12 +1,17 @@
 // Dev-only: boot the built portable exe and verify it renders the home screen,
-// the new word packs, and the 18+ opt-in gate.
+// the new word packs, the 18+ opt-in gate and the powerups modifier.
+// Always runs with a throwaway profile so it never touches real user data.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 
 const version = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url))).version;
 const exe = `dist/Codenames-Masry-${version}.exe`;
 const port = 9333;
-const child = spawn(exe, [`--remote-debugging-port=${port}`], { stdio: 'ignore' });
+const profile = path.join(os.tmpdir(), 'cnm-verify-profile');
+fs.rmSync(profile, { recursive: true, force: true });
+const child = spawn(exe, [`--remote-debugging-port=${port}`, `--user-data-dir=${profile}`], { stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 let page = null;
@@ -87,6 +92,8 @@ const gate = await ev(`(() => {
 console.log('ADULT GATE', JSON.stringify(gate));
 
 // run a quick local game to prove the packaged UI is interactive
+await ev(`document.querySelector('#powerups-toggle').click()`);
+const puToggle = await ev(`document.querySelector('#powerups-toggle').classList.contains('on')`);
 await ev(`document.querySelector('#start-local').click()`);
 await sleep(500);
 await ev(`document.querySelector('#handoff-ok').click()`);
@@ -94,7 +101,10 @@ await sleep(400);
 console.log('GAME', JSON.stringify(await ev(`({
   screen: document.querySelector('.screen.active')?.id,
   cards: document.querySelectorAll('.card').length,
-  spyKey: document.querySelectorAll('.card.key-red,.card.key-blue,.card.key-assassin').length
+  spyKey: document.querySelectorAll('.card.key-red,.card.key-blue,.card.key-assassin').length,
+  puToggle: ${puToggle},
+  powerupBadges: document.querySelectorAll('.pu-badge').length,
+  modChip: !document.querySelector('#mod-chip').hidden
 })`)));
 
 // custom words: save, reload, confirm they survived (IPC store)

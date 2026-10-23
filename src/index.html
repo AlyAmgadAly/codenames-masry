@@ -23,7 +23,7 @@
     <div class="brand">
       <div class="brand-glyph" aria-hidden="true">𓆣</div>
       <h1>كلمة <span>سر</span></h1>
-      <p class="tagline">كود نيمز مصري: ميمز، نجوم، أكل… وواحد فيهم القاتل 💀</p>
+      <p class="tagline">كود نيمز مصري: ميمز، نجوم، أكل… وواحد فيهم القاتل 💀 وباور أبس مخفية 🎁</p>
     </div>
 
     <div class="home-grid">
@@ -102,6 +102,14 @@
           <button data-first="red">الأحمر</button>
           <button data-first="blue">الأزرق</button>
         </div>
+
+        <h3>مودز اللعب</h3>
+        <button type="button" class="mod-btn" id="powerups-toggle">
+          <span class="mod-ico">🎁</span>
+          <span class="mod-body"><b>باور أبس</b><small>٣ هدايا مخفية تحت كروت عشوائية</small></span>
+          <span class="mod-check">✓</span>
+        </button>
+        <p class="hint">هدية مضمونة لكل فريق + هدية على كارت رمادي. اللي يكشف الكارت بياخدها.</p>
       </div>
 
       <div class="panel-box">
@@ -199,6 +207,12 @@
         <button data-timer="120">٢ د</button>
         <button data-timer="180">٣ د</button>
       </div>
+      <h3>مودز اللعب</h3>
+      <button type="button" class="mod-btn" id="lobby-powerups-toggle">
+        <span class="mod-ico">🎁</span>
+        <span class="mod-body"><b>باور أبس</b><small>٣ هدايا مخفية تحت كروت عشوائية</small></span>
+        <span class="mod-check">✓</span>
+      </button>
       <p class="hint">الإعدادات دي بيتحكم فيها الهوست قبل بدء اللعبة.</p>
     </div>
 
@@ -212,10 +226,12 @@
 <!-- ============================ GAME ============================ -->
 <section class="screen" id="screen-game">
   <div class="game">
+    <div class="pu-banner" id="pu-banner" hidden></div>
     <header class="gamebar">
       <button class="icon-btn" id="exit-game" title="خروج من اللعبة">✕</button>
       <div class="turn-pill" id="turn-pill"><i></i><span>دور الأحمر</span></div>
       <div class="timer" id="timer" title="وقت التخمين">--:--</div>
+      <div class="mod-chip" id="mod-chip" hidden>🎁 باور أبس</div>
       <div class="spacer"></div>
       <button class="room-chip" id="room-chip" hidden></button>
       <div class="me-badge" id="me-badge" hidden></div>
@@ -226,10 +242,12 @@
         <div class="scoreboard">
           <div class="score red" id="score-red">
             <span class="score-name">الفريق الأحمر</span>
+            <span class="shield-chip" id="shield-red" hidden title="درع">🛡️</span>
             <span class="score-num">9</span>
           </div>
           <div class="score blue" id="score-blue">
             <span class="score-name">الفريق الأزرق</span>
+            <span class="shield-chip" id="shield-blue" hidden title="درع">🛡️</span>
             <span class="score-num">9</span>
           </div>
         </div>
@@ -322,6 +340,7 @@
       <li>الفريق بيخمن قد الرقم <b>+ ١</b>. كل تخمين صح بيكملوا، أول غلط بيخلص الدور.</li>
       <li>لو كشفوا كارت للفريق التاني، بيتحسب للتاني وبيخلص دورهم.</li>
       <li>لو فتحوا <b>القاتل</b> — خسروا فوراً 😅</li>
+      <li>لو <b>الباور أبس</b> شغالة: ٣ هدايا مخفية تحت كروت (واحدة لكل فريق + واحدة على كارت رمادي). اللي يكشف الكارت بياخدها: <b>⚡ +٢ تخمينات</b>، <b>🛡️ درع</b> بيمنع غلطة واحدة (وحتى القاتل مرة)، أو <b>👁️ كشف</b> كارت مجاني من كروت فريقك.</li>
       <li>أول فريق يكشف كل كلماته يكسب.</li>
     </ol>
     <p class="hint">أونلاين: الماستر بيعمل غرفة، بياخد كود، وبيديه لأصحابه. الكمبيوتر بتاعه هو اللي بيشغّل اللعبة.</p>

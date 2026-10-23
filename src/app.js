@@ -21,6 +21,7 @@ const DEFAULT_SETTINGS = {
   timer: 0,
   sound: true,
   showEn: true,
+  powerups: false,
   name: '',
   redName: 'الفريق الأحمر',
   blueName: 'الفريق الأزرق'
@@ -55,6 +56,8 @@ const app = {
     joining: false
   },
   lastTap: 0,
+  lastPuTs: 0,
+  puTimer: null,
   toastTimer: null
 };
 
@@ -196,6 +199,7 @@ function sfx(kind) {
     case 'win': [523, 659, 784, 1046].forEach((f, i) => tone(f, 0.2, 'triangle', i * 0.11, 0.07)); break;
     case 'lose': [392, 330, 262, 196].forEach((f, i) => tone(f, 0.22, 'sine', i * 0.13, 0.06)); break;
     case 'tap': tone(620, 0.05, 'sine', 0, 0.03); break;
+    case 'power': [660, 880, 1100, 1320].forEach((f, i) => tone(f, 0.13, 'triangle', i * 0.06, 0.05)); break;
     default: break;
   }
 }
@@ -271,7 +275,19 @@ function renderSetup() {
   $('#name-blue').value = app.settings.blueName;
   $$('#timer-seg button').forEach(b => b.classList.toggle('on', Number(b.dataset.timer) === app.settings.timer));
   renderPackGrid('pack-grid');
+  renderPowerupToggles();
   updatePoolCounters();
+}
+
+function renderPowerupToggles() {
+  const on = !!app.settings.powerups;
+  for (const sel of ['#powerups-toggle', '#lobby-powerups-toggle']) {
+    const btn = $(sel);
+    if (!btn) continue;
+    btn.classList.toggle('on', on);
+    btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+    btn.disabled = sel === '#lobby-powerups-toggle' && !app.online.isHost;
+  }
 }
 
 /* ------------------------------------------------------------------ */
@@ -297,12 +313,14 @@ function startLocal() {
     firstTeam: first,
     timerSeconds: app.settings.timer,
     mode: 'local',
-    packs: app.settings.packs
+    packs: app.settings.packs,
+    powerups: !!app.settings.powerups
   });
   app.local.revealed = new Set();
   app.local.phase = 'handoff-spymaster';
   app.shownOver = false;
   app.seen = new Set();
+  app.lastPuTs = 0;
   app.endGuard = false;
 
   go('game');
@@ -361,10 +379,12 @@ function localReveal(index) {
   const res = E.reveal(st, index);
   if (!res.ok) return toast(res.error);
 
-  if (res.type === 'correct' || res.type === 'exhausted') sfx('correct');
-  else if (res.type === 'wrong') sfx('wrong');
+  if (res.type === 'win') sfx('win');
   else if (res.type === 'assassin') sfx('lose');
-  else if (res.type === 'win') sfx('win');
+  else if (res.type === 'shielded' || res.type === 'saved') sfx('power');
+  else if (res.type === 'correct' || res.type === 'exhausted') sfx('correct');
+  else if (res.type === 'wrong') sfx('wrong');
+  if (res.type === 'shielded' || res.type === 'saved') toast('🛡️ الدرع اشتغل!');
 
   renderGame();
 
@@ -373,7 +393,7 @@ function localReveal(index) {
     setTimeout(() => showGameOver(localView()), 620);
     return;
   }
-  if (res.type !== 'correct') {
+  if (res.type !== 'correct' && res.type !== 'shielded') {
     setTimeout(() => {
       if (st.phase === 'over') return;
       if (app.local.phase === 'guess') showHandoff('spymaster');
@@ -665,11 +685,13 @@ function hostStart() {
     firstTeam: Math.random() < 0.5 ? 'red' : 'blue',
     timerSeconds: app.settings.timer,
     mode: 'online',
-    packs: app.settings.packs
+    packs: app.settings.packs,
+    powerups: !!app.settings.powerups
   });
   app.shownOver = false;
   app.endGuard = false;
   app.seen = new Set();
+  app.lastPuTs = 0;
   broadcastState();
   go('game');
 }
@@ -703,6 +725,7 @@ function guestOnData(msg) {
       app.clockOffset = (msg.view.now || Date.now()) - Date.now();
       if (msg.view.version === 1) app.seen = new Set();
       if (app.screen !== 'game') {
+        app.lastPuTs = msg.view.lastPowerup?.ts || 0;
         closeOverlay('overlay-handoff');
         go('game');
       } else {
@@ -791,6 +814,7 @@ function renderLobby() {
     pg.appendChild(b);
   }
   $$('#lobby-timer-seg button').forEach(b => b.classList.toggle('on', Number(b.dataset.timer) === app.settings.timer));
+  renderPowerupToggles();
 
   const list = $('#players-list');
   list.innerHTML = '';
@@ -894,6 +918,11 @@ function renderGame() {
   sb.querySelector('.score-num').textContent = v.scores.blue;
   sr.classList.toggle('active', v.turn === 'red' && v.phase !== 'over');
   sb.classList.toggle('active', v.turn === 'blue' && v.phase !== 'over');
+  $('#shield-red').hidden = !(v.shields?.red > 0);
+  $('#shield-blue').hidden = !(v.shields?.blue > 0);
+  $('#mod-chip').hidden = !v.modifiers?.powerups;
+
+  maybeShowPowerup(v);
 
   const chip = $('#room-chip');
   if (app.mode === 'online' && app.online.room) {
@@ -952,12 +981,47 @@ function renderBoard(v) {
     en.textContent = c.en || '';
     btn.append(word, en);
 
+    if (c.powerup && !c.powerup.used) {
+      const pu = document.createElement('span');
+      pu.className = 'pu-badge';
+      pu.textContent = '?';
+      pu.title = 'باور أب مخفي — اللي يكشف الكارت بياخده';
+      btn.appendChild(pu);
+    }
+
     btn.addEventListener('click', () => onCardClick(i));
     board.appendChild(btn);
   });
 
   app.local.revealed = new Set(v.board.filter(c => c.revealed).map(c => c.id));
   v.board.filter(c => c.revealed).forEach(c => app.seen.add(c.id));
+}
+
+/* ---------- powerup feedback ---------- */
+function maybeShowPowerup(v) {
+  const pu = v.lastPowerup;
+  if (!pu || !pu.ts || pu.ts === app.lastPuTs) return;
+  app.lastPuTs = pu.ts;
+  const el = $('#pu-banner');
+  if (!el) return;
+  const info = E.POWERUP_INFO[pu.type] || { emoji: '🎁', name: 'باور أب', desc: '' };
+  const what = pu.type === 'surge'
+    ? '+٢ تخمينات'
+    : pu.type === 'shield'
+      ? 'درع ضد غلطة واحدة'
+      : pu.type === 'reveal'
+        ? (pu.autoCard ? `كشف كارت: ${pu.autoCard}` : 'كشف كارت')
+        : info.desc;
+  el.className = 'pu-banner ' + (pu.team || '');
+  el.innerHTML = `<span class="pu-ic">${info.emoji}</span><span><b>${teamName(pu.team)}</b> لاقوا ${info.name} — ${escapeHtml(what)}</span>`;
+  el.hidden = false;
+  clearTimeout(app.puTimer);
+  requestAnimationFrame(() => el.classList.add('show'));
+  app.puTimer = setTimeout(() => {
+    el.classList.remove('show');
+    setTimeout(() => { el.hidden = true; }, 280);
+  }, 3000);
+  sfx('power');
 }
 
 function renderClue(v) {
@@ -1426,6 +1490,21 @@ function bind() {
     saveSettings();
     $$('#lobby-timer-seg button').forEach(x => x.classList.toggle('on', x === b));
   }));
+
+  // game modifiers
+  $('#powerups-toggle').addEventListener('click', () => {
+    app.settings.powerups = !app.settings.powerups;
+    saveSettings();
+    sfx('tap');
+    renderPowerupToggles();
+  });
+  $('#lobby-powerups-toggle').addEventListener('click', () => {
+    if (!app.online.isHost) return;
+    app.settings.powerups = !app.settings.powerups;
+    saveSettings();
+    sfx('tap');
+    renderPowerupToggles();
+  });
 
   // game
   $('#exit-game').addEventListener('click', exitGame);

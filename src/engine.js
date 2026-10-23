@@ -9,6 +9,14 @@ export const ASSASSIN = 'assassin';
 
 export const TEAM_LABEL = { red: 'الأحمر', blue: 'الأزرق' };
 
+/* ---------- powerups (optional game modifier) ---------- */
+export const POWERUP_IDS = ['surge', 'shield', 'reveal'];
+export const POWERUP_INFO = {
+  surge: { id: 'surge', emoji: '⚡', name: 'دفعة تخمينات', desc: '+٢ تخمينات' },
+  shield: { id: 'shield', emoji: '🛡️', name: 'درع', desc: 'بيمنع غلطة واحدة (وحتى القاتل مرة)' },
+  reveal: { id: 'reveal', emoji: '👁️', name: 'كشف', desc: 'بيكشف كارت من كروت فريقك' }
+};
+
 /* ---------- tiny rng helpers (seeded rng optional) ---------- */
 export function mulberry32(a) {
   return function () {
@@ -71,6 +79,23 @@ export function buildBoard(pool, firstTeam = RED, rng = Math.random) {
   }));
 }
 
+// One powerup under a random red card, one under a blue card, and one under a
+// neutral card. The types are dealt randomly, so nobody knows what is where.
+export function dealPowerups(board, rng = Math.random) {
+  const byColour = { [RED]: [], [BLUE]: [], [NEUTRAL]: [] };
+  for (const card of board) {
+    if (byColour[card.color]) byColour[card.color].push(card);
+  }
+  const types = shuffle(POWERUP_IDS, rng);
+  [RED, BLUE, NEUTRAL].forEach((colour, i) => {
+    const list = byColour[colour];
+    if (!list.length) return;
+    const card = list[Math.floor(rng() * list.length)];
+    card.powerup = types[i];
+    card.powerupUsed = false;
+  });
+}
+
 /* ---------- state ---------- */
 export function createState(opts = {}, rng = Math.random) {
   const {
@@ -79,18 +104,24 @@ export function createState(opts = {}, rng = Math.random) {
     timerSeconds = 0,
     now = Date.now(),
     mode = 'local',
-    packs = []
+    packs = [],
+    powerups = false
   } = opts;
 
   const board = buildBoard(pool, firstTeam, rng);
+  if (powerups) dealPowerups(board, rng);
   const state = {
     version: 1,
     mode,
     packs,
     board,
+    modifiers: { powerups: !!powerups },
     startTeam: firstTeam,
     turn: firstTeam,
     scores: { red: board.filter(c => c.color === RED).length, blue: board.filter(c => c.color === BLUE).length },
+    shields: { red: 0, blue: 0 },
+    bonusGuesses: { red: 0, blue: 0 },
+    lastPowerup: null,
     clue: null,
     phase: 'clue',          // clue | guess | over
     clueNumber: 0,
@@ -117,66 +148,140 @@ export function setClue(state, word, count, now = Date.now()) {
   const clean = String(word || '').trim();
   if (!clean) return { ok: false, error: 'اكتب كلمة التلميح' };
   const n = Math.max(0, Math.min(9, Number(count) || 0));
+  const bonus = state.bonusGuesses?.[state.turn] || 0;
   state.clue = { word: clean, count: n, team: state.turn };
   state.phase = 'guess';
-  state.guessesLeft = n + 1;              // official: number + 1 guesses
+  state.guessesLeft = n + 1 + bonus;      // official: number + 1 guesses (+ powerup bonus)
+  if (bonus) {
+    state.bonusGuesses[state.turn] = 0;
+    addLog(state, 'power', `⚡ ${TEAM_LABEL[state.turn]}: +${bonus} تخمين من الباور أب`);
+  }
   if (state.timerSeconds > 0) state.turnEndsAt = now + state.timerSeconds * 1000;
   addLog(state, 'clue', `${TEAM_LABEL[state.turn]}: «${clean}» ${n}`);
   state.version++;
   return { ok: true };
 }
 
-export function reveal(state, index) {
+export function reveal(state, index, rng = Math.random) {
   if (state.phase !== 'guess') return { ok: false, error: 'مش وقت التخمين' };
   const card = state.board[index];
   if (!card) return { ok: false, error: 'كارت غلط' };
   if (card.revealed) return { ok: false, error: 'الكارت مكشوف already' };
 
+  const team = state.turn;
   card.revealed = true;
   state.version++;
 
-  if (card.color === ASSASSIN) {
-    state.phase = 'over';
-    state.winner = state.turn === RED ? BLUE : RED;
-    state.winReason = `الفريق ${TEAM_LABEL[state.turn]} فتحوا القاتل 💀`;
-    addLog(state, 'bad', `💀 ${card.ar} — القاتل!`);
-    return { ok: true, type: 'assassin' };
-  }
+  let type = 'correct';
+  let assassinSaved = false;
 
-  if (card.color === state.turn) {
-    state.scores[card.color]--;
+  if (card.color === ASSASSIN) {
+    if ((state.shields?.[team] || 0) > 0) {
+      state.shields[team]--;
+      assassinSaved = true;
+      type = 'saved';
+      addLog(state, 'power', `🛡️ درع ${TEAM_LABEL[team]} أنقذهم من القاتل!`);
+    } else {
+      state.phase = 'over';
+      state.winner = team === RED ? BLUE : RED;
+      state.winReason = `الفريق ${TEAM_LABEL[team]} فتحوا القاتل 💀`;
+      addLog(state, 'bad', `💀 ${card.ar} — القاتل!`);
+      return { ok: true, type: 'assassin' };
+    }
+  } else if (card.color === team) {
+    state.scores[team]--;
     state.guessesLeft = Math.max(0, state.guessesLeft - 1);
     addLog(state, 'good', `✅ ${card.ar}`);
-    if (state.scores[card.color] === 0) {
-      state.phase = 'over';
-      state.winner = card.color;
-      state.winReason = `الفريق ${TEAM_LABEL[card.color]} كشف كل كلماته`;
-      addLog(state, 'win', `🏆 ${TEAM_LABEL[card.color]} كسبوا!`);
-      return { ok: true, type: 'win' };
+  } else {
+    if (card.color !== NEUTRAL) {
+      state.scores[card.color]--;
+      addLog(state, 'bad', card.color === RED ? `🔴 ${card.ar}` : `🔵 ${card.ar}`);
+      if (state.scores[card.color] === 0) {
+        state.phase = 'over';
+        state.winner = card.color;
+        state.winReason = `الفريق ${TEAM_LABEL[card.color]} كشف كل كلماته`;
+        addLog(state, 'win', `🏆 ${TEAM_LABEL[card.color]} كسبوا!`);
+        return { ok: true, type: 'win' };
+      }
+    } else {
+      addLog(state, 'bad', `⚪ ${card.ar}`);
     }
-    if (state.guessesLeft === 0) {
-      endTurn(state);
-      return { ok: true, type: 'exhausted' };
-    }
-    return { ok: true, type: 'correct' };
+    type = 'wrong';
   }
 
-  // wrong card (opponent or neutral) — turn ends
-  if (card.color !== NEUTRAL) {
-    state.scores[card.color]--;
-    addLog(state, 'bad', card.color === RED ? `🔴 ${card.ar}` : `🔵 ${card.ar}`);
-    if (state.scores[card.color] === 0) {
-      state.phase = 'over';
-      state.winner = card.color;
-      state.winReason = `الفريق ${TEAM_LABEL[card.color]} كشف كل كلماته`;
-      addLog(state, 'win', `🏆 ${TEAM_LABEL[card.color]} كسبوا!`);
-      return { ok: true, type: 'win' };
-    }
-  } else {
-    addLog(state, 'bad', `⚪ ${card.ar}`);
+  // A powerup hidden under the revealed card goes to the team that flipped it.
+  const powerup = (card.powerup && !card.powerupUsed)
+    ? applyPowerup(state, card, team, rng)
+    : null;
+
+  if (state.scores[team] === 0) {
+    state.phase = 'over';
+    state.winner = team;
+    state.winReason = `الفريق ${TEAM_LABEL[team]} كشف كل كلماته`;
+    addLog(state, 'win', `🏆 ${TEAM_LABEL[team]} كسبوا!`);
+    return { ok: true, type: 'win', powerup };
   }
-  endTurn(state);
-  return { ok: true, type: 'wrong' };
+
+  if (type === 'wrong' || assassinSaved) {
+    // A shield (found earlier, or under this very card) saves the turn.
+    if ((state.shields?.[team] || 0) > 0) {
+      state.shields[team]--;
+      addLog(state, 'power', `🛡️ درع ${TEAM_LABEL[team]} منع خسارة الدور`);
+      return { ok: true, type: 'shielded', powerup };
+    }
+    endTurn(state);
+    return { ok: true, type: assassinSaved ? 'saved' : 'wrong', powerup };
+  }
+
+  if (state.guessesLeft === 0) {
+    endTurn(state);
+    return { ok: true, type: 'exhausted', powerup };
+  }
+  return { ok: true, type: 'correct', powerup };
+}
+
+/* ---------- powerup effects ---------- */
+function autoRevealOwn(state, team, rng) {
+  const own = state.board.filter(c => !c.revealed && c.color === team);
+  if (!own.length) return null;
+  // Prefer cards without a powerup so one pickup can't chain into another.
+  const safe = own.filter(c => !c.powerup || c.powerupUsed);
+  const pool = safe.length ? safe : own;
+  const card = pool[Math.floor(rng() * pool.length)];
+  card.revealed = true;
+  state.scores[team] = Math.max(0, state.scores[team] - 1);
+  addLog(state, 'power', `👁️ كشف مجاني: ${card.ar}`);
+  return card;
+}
+
+function applyPowerup(state, card, team, rng) {
+  const type = card.powerup;
+  if (!type) return null;
+  card.powerupUsed = true;
+  const info = POWERUP_INFO[type] || { emoji: '🎁', name: 'باور أب' };
+  const wrong = card.color !== team && card.color !== ASSASSIN;
+  const event = { type, team, cardAr: card.ar, ts: Date.now(), autoCard: null };
+
+  if (type === 'surge') {
+    if (wrong) {
+      state.bonusGuesses[team] = (state.bonusGuesses[team] || 0) + 2;
+      addLog(state, 'power', `${info.emoji} ${TEAM_LABEL[team]} لاقوا ${info.name} — +٢ تخمين في دورهم الجاي`);
+    } else {
+      state.guessesLeft += 2;
+      addLog(state, 'power', `${info.emoji} ${TEAM_LABEL[team]} لاقوا ${info.name} — +٢ تخمين`);
+    }
+  } else if (type === 'shield') {
+    state.shields[team] = 1;
+    addLog(state, 'power', `${info.emoji} ${TEAM_LABEL[team]} لاقوا ${info.name} — بيمنع غلطة واحدة`);
+  } else if (type === 'reveal') {
+    const target = autoRevealOwn(state, team, rng);
+    event.autoCard = target ? target.ar : null;
+    if (!target) addLog(state, 'power', `${info.emoji} ${TEAM_LABEL[team]} لاقوا ${info.name} بس مفيش كروت تتكشف`);
+  }
+
+  state.lastPowerup = event;
+  state.version++;
+  return event;
 }
 
 export function endTurn(state, now = Date.now()) {
@@ -206,11 +311,15 @@ export function makeView(state, opts = {}) {
       ar: c.ar,
       en: c.en,
       revealed: c.revealed,
-      color: showKey || c.revealed ? c.color : null
+      color: showKey || c.revealed ? c.color : null,
+      powerup: c.powerup ? { used: !!c.powerupUsed, type: c.powerupUsed ? c.powerup : null } : null
     })),
     turn: state.turn,
     startTeam: state.startTeam,
     scores: { ...state.scores },
+    shields: { ...(state.shields || { red: 0, blue: 0 }) },
+    modifiers: { ...(state.modifiers || { powerups: false }) },
+    lastPowerup: state.lastPowerup || null,
     clue: state.clue,
     phase: state.phase,
     guessesLeft: state.guessesLeft,
