@@ -1,7 +1,7 @@
 {
   "name": "codenames-masry",
   "productName": "Codenames Masry",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "كلمة سر — لعبة كود نيمز مصرية (Codenames Masry)",
   "main": "main.js",
   "author": "Codenames Masry",
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "electron .",
     "dev": "electron . --dev",
-    "test": "node test/engine.test.mjs",
+    "test": "node --test test/engine.test.mjs test/packs.test.mjs",
     "build:icon": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/make-icon.ps1",
     "dist": "electron-builder --win portable"
   },

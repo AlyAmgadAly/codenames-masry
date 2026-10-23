@@ -1,9 +1,12 @@
-// Dev-only: boot the built portable exe and verify it renders the home screen.
+// Dev-only: boot the built portable exe and verify it renders the home screen,
+// the new word packs, and the 18+ opt-in gate.
 import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 
+const version = JSON.parse(fs.readFileSync(new URL('../package.json', import.meta.url))).version;
+const exe = `dist/Codenames-Masry-${version}.exe`;
 const port = 9333;
-const child = spawn('dist/Codenames-Masry-1.0.0.exe', [`--remote-debugging-port=${port}`], { stdio: 'ignore' });
+const child = spawn(exe, [`--remote-debugging-port=${port}`], { stdio: 'ignore' });
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 let page = null;
@@ -46,14 +49,44 @@ const info = await ev(`(() => ({
   version: document.querySelector('#ver-label')?.textContent,
   window: [innerWidth, innerHeight],
   fitsHome: document.querySelector('#screen-home').scrollHeight <= document.querySelector('#screen-home').clientHeight,
-  compact: matchMedia('(max-height: 830px)').matches,
-  srcHasHostFix: true
+  compact: matchMedia('(max-height: 830px)').matches
 }))()`);
-console.log(JSON.stringify(info, null, 1));
+console.log('HOME', JSON.stringify(info));
+
+// new packs: 10 cards, all >= 80 words, adult off by default and gated behind confirm()
+await ev(`document.querySelector('#go-local').click()`);
+await sleep(400);
+const packs = await ev(`(() => {
+  const cards = [...document.querySelectorAll('#pack-grid .pack')];
+  return {
+    screen: document.querySelector('.screen.active')?.id,
+    total: cards.length,
+    packs: cards.map(b => ({
+      id: b.dataset.pack,
+      on: b.classList.contains('on'),
+      adult: b.classList.contains('adult'),
+      count: parseInt(b.querySelector('.p-count').textContent, 10)
+    })),
+    pool: document.querySelector('#pool-counter')?.textContent
+  };
+})()`);
+console.log('PACKS', JSON.stringify(packs, null, 1));
+
+const gate = await ev(`(() => {
+  let asks = 0;
+  const btn = () => document.querySelector('#pack-grid .pack[data-pack="adult"]');
+  window.confirm = () => { asks++; return false; };
+  btn().click();
+  const afterCancel = btn().classList.contains('on');
+  window.confirm = () => { asks++; return true; };
+  btn().click();
+  const afterOk = btn().classList.contains('on');
+  btn().click(); // turn it back off for the rest of the test
+  return { asks, afterCancel, afterOk, afterOff: btn().classList.contains('on') };
+})()`);
+console.log('ADULT GATE', JSON.stringify(gate));
 
 // run a quick local game to prove the packaged UI is interactive
-await ev(`document.querySelector('#go-local').click()`);
-await sleep(300);
 await ev(`document.querySelector('#start-local').click()`);
 await sleep(500);
 await ev(`document.querySelector('#handoff-ok').click()`);

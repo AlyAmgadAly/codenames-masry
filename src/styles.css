@@ -452,6 +452,12 @@ input, textarea { user-select: text; }
   background: linear-gradient(150deg, rgba(236, 186, 82, 0.1), rgba(255, 255, 255, 0.02));
 }
 .pack.on .p-check { background: var(--gold); border-color: var(--gold); color: #241a08; }
+.pack.adult .p-name { color: #ff9a8d; }
+.pack.adult.on {
+  border-color: rgba(255, 122, 110, 0.5);
+  background: linear-gradient(150deg, rgba(255, 122, 110, 0.12), rgba(255, 255, 255, 0.02));
+}
+.pack.adult.on .p-check { background: #ff7a6e; border-color: #ff7a6e; color: #2a0d0a; }
 
 .page-actions {
   display: flex;

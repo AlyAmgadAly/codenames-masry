@@ -26,6 +26,8 @@ const DEFAULT_SETTINGS = {
   blueName: 'الفريق الأزرق'
 };
 
+let adultWarned = false;
+
 const app = {
   screen: 'home',
   mode: 'local',                 // local | online
@@ -218,7 +220,7 @@ function renderPackGrid(targetId = 'pack-grid', hostOnly = false) {
     const on = app.settings.packs.includes(pack.id);
     const b = document.createElement('button');
     b.type = 'button';
-    b.className = 'pack' + (on ? ' on' : '');
+    b.className = 'pack' + (on ? ' on' : '') + (pack.id === 'adult' ? ' adult' : '');
     b.dataset.pack = pack.id;
     b.innerHTML = `<span class="p-ico">${pack.emoji || '📦'}</span>
       <span><span class="p-name">${escapeHtml(pack.name)}</span><br><span class="p-count">${count} كلمة</span></span>
@@ -227,6 +229,11 @@ function renderPackGrid(targetId = 'pack-grid', hostOnly = false) {
       const has = app.settings.packs.includes(pack.id);
       if (has && app.settings.packs.length === 1) return toast('لازم تختار باكدج واحد على الأقل');
       if (count === 0) return toast('الباكدج ده فاضي — ضيف كلمات من «كلماتي»');
+      if (!has && pack.id === 'adult' && !adultWarned) {
+        const ok = confirm('باكدج «١٨+ هزار الكبار» فيه كلام للكبار بس.\nمتأكد إن كل اللي هيلعبوا معاك كبار؟');
+        if (!ok) return;
+        adultWarned = true;
+      }
       app.settings.packs = has
         ? app.settings.packs.filter(id => id !== pack.id)
         : [...app.settings.packs, pack.id];
